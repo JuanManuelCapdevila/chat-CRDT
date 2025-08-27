@@ -32,7 +32,8 @@ class InfoNodo:
     puerto: int
     timestamp: float
     version_protocolo: str = "1.0"
-    tipo_aplicacion: str = "crucigrama_crdt"
+    tipo_aplicacion: str = "chat_crdt"
+    puerto_chat: int = 0  # Puerto específico del servicio de chat
     
     def to_dict(self):
         return asdict(self)
@@ -50,6 +51,7 @@ class DescubridorNodos:
         self.nombre_usuario = nombre_usuario
         self.puerto_base = puerto_base
         self.puerto_escucha = puerto_base
+        self.puerto_servicio_chat = puerto_base  # Puerto del servicio de chat
         self.nodos_descubiertos: Dict[str, InfoNodo] = {}
         self.callbacks_descubrimiento: List[Callable] = []
         self.callbacks_perdida: List[Callable] = []
@@ -59,6 +61,10 @@ class DescubridorNodos:
         
         # Configurar logging
         self.logger = logging.getLogger(f"Descubridor-{node_id}")
+        
+    def establecer_puerto_chat(self, puerto_chat: int):
+        """Establece el puerto del servicio de chat"""
+        self.puerto_servicio_chat = puerto_chat
     
     def agregar_callback_descubrimiento(self, callback: Callable[[InfoNodo], None]):
         """Agrega callback para cuando se descubre un nodo"""
@@ -182,9 +188,10 @@ class DescubridorUDPBroadcast(DescubridorNodos):
         info = InfoNodo(
             node_id=self.node_id,
             nombre_usuario=self.nombre_usuario,
-            ip_address=self._obtener_ip_local(),
-            puerto=self.puerto_escucha,
-            timestamp=time.time()
+            ip_address="localhost",  # Usar localhost para pruebas locales
+            puerto=self.puerto_servicio_chat,  # Usar puerto del chat, no del descubridor
+            timestamp=time.time(),
+            puerto_chat=self.puerto_servicio_chat
         )
         return json.dumps(info.to_dict())
     
@@ -342,18 +349,25 @@ class DescubridorEscanPuertos(DescubridorNodos):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(self.timeout_conexion)
             
-            resultado = sock.connect_ex((ip, self.puerto_servicio))
+            # Probar conexión al puerto del chat
+            resultado = sock.connect_ex((ip, self.puerto_servicio_chat))
             if resultado == 0:
-                # Conexión exitosa, obtener información del nodo
-                data = sock.recv(1024)
-                if data:
-                    info_nodo = InfoNodo.from_dict(json.loads(data.decode('utf-8')))
-                    
-                    if info_nodo.node_id != self.node_id:  # Ignorar nosotros mismos
-                        if info_nodo.node_id not in self.nodos_descubiertos:
-                            self.logger.info(f"Nodo encontrado por escaneo: {info_nodo.nombre_usuario}")
-                            self.nodos_descubiertos[info_nodo.node_id] = info_nodo
-                            self._notificar_descubrimiento(info_nodo)
+                # Conexión exitosa - este es un nodo válido
+                # Crear info básica del nodo encontrado
+                info_nodo = InfoNodo(
+                    node_id=f"scan_{ip}_{self.puerto_servicio_chat}",
+                    nombre_usuario=f"Usuario_{ip.split('.')[-1]}",
+                    ip_address=ip,
+                    puerto=self.puerto_servicio_chat,
+                    timestamp=time.time(),
+                    puerto_chat=self.puerto_servicio_chat
+                )
+                
+                if info_nodo.node_id != self.node_id:  # Ignorar nosotros mismos
+                    if info_nodo.node_id not in self.nodos_descubiertos:
+                        self.logger.info(f"Nodo encontrado por escaneo: {info_nodo.nombre_usuario}")
+                        self.nodos_descubiertos[info_nodo.node_id] = info_nodo
+                        self._notificar_descubrimiento(info_nodo)
             
             sock.close()
         

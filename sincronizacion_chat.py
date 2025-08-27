@@ -96,7 +96,8 @@ class ClienteP2PChat:
                  puerto: int = 0, habilitar_autodescubrimiento: bool = True):
         self.chat = chat
         self.nombre_usuario = nombre_usuario or chat.usuario_id
-        self.puerto = puerto or self._obtener_puerto_libre()
+        # Usar puerto base estándar o el especificado
+        self.puerto = puerto or self._obtener_puerto_en_rango()
         self.sincronizador = SincronizadorChat(chat)
         
         # Estado de conexión
@@ -130,6 +131,19 @@ class ClienteP2PChat:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('localhost', 0))
             return s.getsockname()[1]
+    
+    def _obtener_puerto_en_rango(self, puerto_base: int = 12000) -> int:
+        """Obtiene un puerto libre en un rango específico para facilitar descubrimiento"""
+        for puerto in range(puerto_base, puerto_base + 100):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(('localhost', puerto))
+                    return puerto
+            except OSError:
+                continue
+        
+        # Si no encuentra ninguno en el rango, usar puerto aleatorio
+        return self._obtener_puerto_libre()
     
     def iniciar(self):
         """Inicia el cliente P2P"""
@@ -175,18 +189,13 @@ class ClienteP2PChat:
             return
         
         try:
-            info_nodo = InfoNodo(
-                node_id=self.chat.usuario_id,
-                nombre_usuario=self.nombre_usuario,
-                ip_address="localhost",
-                puerto=self.puerto,
-                timestamp=time.time()
-            )
-            
             self.gestor_descubrimiento = GestorDescubrimiento(
                 self.chat.usuario_id,
                 self.nombre_usuario
             )
+            
+            # Configurar puerto del chat en los descubridores
+            self.puerto_chat = self.puerto
             
             # Configurar callback
             def callback_consolidado(accion, nodo):
@@ -197,9 +206,13 @@ class ClienteP2PChat:
             
             self.gestor_descubrimiento.callbacks_cambio.append(callback_consolidado)
             
-            # Agregar algoritmos de descubrimiento
-            self.gestor_descubrimiento.agregar_descubridor(TipoDescubrimiento.UDP_BROADCAST, self.puerto)
-            self.gestor_descubrimiento.agregar_descubridor(TipoDescubrimiento.SCAN_PUERTOS, self.puerto)
+            # Agregar algoritmos de descubrimiento usando rango de puertos estándar
+            self.gestor_descubrimiento.agregar_descubridor(TipoDescubrimiento.UDP_BROADCAST, 12000)
+            self.gestor_descubrimiento.agregar_descubridor(TipoDescubrimiento.SCAN_PUERTOS, 12000)
+            
+            # Configurar el puerto del chat en los descubridores
+            for descubridor in self.gestor_descubrimiento.descubridores.values():
+                descubridor.establecer_puerto_chat(self.puerto)
             
             self.gestor_descubrimiento.iniciar_todos()
             
