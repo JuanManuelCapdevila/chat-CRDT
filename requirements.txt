@@ -1,0 +1,6 @@
+uuid
+typing
+dataclasses
+asyncio
+websockets
+json
