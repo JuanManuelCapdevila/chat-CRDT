@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Punto de entrada para la versión GUI del crucigrama cooperativo
+Punto de entrada para el chat cooperativo con CRDTs
 """
 
-from gui_crucigrama import CrucigramaGUI
+from gui_chat import ChatGUI
 
 
 def main():
-    """Función principal para ejecutar la GUI"""
+    """Función principal para ejecutar el chat"""
     try:
-        app = CrucigramaGUI()
+        print("Iniciando Chat Cooperativo - CRDT...")
+        app = ChatGUI()
         app.ejecutar()
     except Exception as e:
         print(f"Error al iniciar la aplicación: {e}")

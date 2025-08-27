@@ -1,37 +1,30 @@
-# Crucigrama Cooperativo con CRDTs
+# Chat Cooperativo con CRDTs
 
-Un sistema de crucigrama colaborativo implementado en Python usando **Conflict-free Replicated Data Types (CRDTs)** para permitir que múltiples usuarios trabajen simultáneamente sin conflictos de sincronización.
+Un sistema de chat colaborativo implementado en Python usando **Conflict-free Replicated Data Types (CRDTs)** para permitir que múltiples usuarios chateen simultáneamente con autodescubrimiento automático de nodos y lista de participantes en tiempo real.
 
 ## Características
 
-- **Colaboración en tiempo real**: Múltiples usuarios pueden editar el mismo crucigrama simultáneamente
+- **Chat en tiempo real**: Múltiples usuarios pueden chatear simultáneamente sin conflictos
+- **Autodescubrimiento automático**: Encuentra automáticamente otros usuarios en la red local
+- **Lista de nodos en vivo**: Visualización en tiempo real de usuarios conectados y desconectados
+- **Múltiples canales**: Crea y participa en diferentes canales temáticos
 - **Resolución automática de conflictos**: Usa CRDTs con estrategia "Last Writer Wins"
-- **Generación automática**: Crea crucigramas automáticamente con palabras y pistas
-- **Autodescubrimiento de nodos**: Encuentra automáticamente otros usuarios en la red local
-- **Sincronización P2P**: Los cambios se propagan automáticamente entre todos los clientes conectados
-- **Interfaz gráfica moderna**: GUI intuitiva con tkinter para fácil interacción
-- **Interfaz de línea de comandos**: Alternativa simple para interactuar por terminal
-- **Persistencia de operaciones**: Todas las operaciones se almacenan para sincronización
+- **Sincronización P2P**: Los mensajes se propagan automáticamente entre todos los clientes
+- **Edición de mensajes**: Edita y elimina tus propios mensajes
+- **Búsqueda avanzada**: Busca mensajes por contenido o autor
+- **Interfaz moderna**: GUI intuitiva con lista de nodos, canales y estadísticas
 
 ## Estructura del Proyecto
 
 ```
 crucigrama CRDT/
-├── main.py              # Punto de entrada para línea de comandos
-├── main_gui.py          # Punto de entrada para interfaz gráfica (widgets)
-├── main_canvas.py       # Punto de entrada para interfaz Canvas (recomendado)
-├── crucigrama_crdt.py   # Lógica principal del crucigrama con CRDT
+├── main_chat.py         # Punto de entrada principal para el chat
+├── chat_crdt.py         # Lógica principal del chat con CRDT
+├── gui_chat.py          # Interfaz gráfica del chat con lista de nodos
+├── sincronizacion_chat.py # Sistema de sincronización P2P para chat
+├── demo_chat.py         # Demostraciones del chat cooperativo
 ├── crdt_base.py         # Implementación base de CRDTs
-├── sincronizacion.py    # Sistema de sincronización P2P
-├── cliente.py           # Interfaz de usuario en línea de comandos
-├── gui_crucigrama.py    # Interfaz gráfica con widgets tkinter
-├── gui_canvas.py        # Interfaz gráfica optimizada con Canvas
 ├── descubrimiento_nodos.py # Sistema de autodescubrimiento de nodos
-├── generador_crucigramas.py # Generador automático de crucigramas
-├── demo.py              # Demostraciones del sistema (CLI)
-├── demo_gui.py          # Demostraciones con interfaz gráfica
-├── demo_autodescubrimiento.py # Demos de autodescubrimiento
-├── demo_generacion.py   # Demos de generación automática
 ├── requirements.txt     # Dependencias del proyecto
 └── README.md           # Este archivo
 ```
@@ -46,51 +39,43 @@ crucigrama CRDT/
 
 ## Uso
 
-### Ejecución con Interfaz Gráfica
+### Chat Cooperativo
 
-**Versión Canvas (Recomendado - Mejor rendimiento):**
+**Interfaz gráfica del chat:**
 ```bash
-python main_canvas.py
+python main_chat.py
 ```
 
-**Versión Clásica con Widgets:**
+**Demostraciones del chat:**
 ```bash
-python main_gui.py
+python demo_chat.py
 ```
 
-### Ejecución con Línea de Comandos
-```bash
-python main.py
-```
+### Funcionalidades Principales
 
-### Demostraciones
-```bash
-# Demo con línea de comandos
-python demo.py
+1. **Inicia la aplicación** y ingresa tu nombre de usuario
+2. **Visualiza nodos conectados** en el panel izquierdo en tiempo real
+3. **Crea canales** para conversaciones temáticas
+4. **Envía mensajes** que se sincronizan automáticamente
+5. **Edita/elimina** tus propios mensajes
+6. **Busca** en el historial de conversaciones
 
-# Demo con interfaz gráfica
-python demo_gui.py
-
-# Demo de autodescubrimiento de nodos
-python demo_autodescubrimiento.py
-
-# Demo de generación automática de crucigramas
-python demo_generacion.py
-```
-
-## Funcionalidades
+## Funcionalidades del Chat
 
 ### Operaciones Básicas
-- **Establecer letra**: Coloca una letra en una posición específica
-- **Marcar celda negra**: Bloquea una celda (celdas sombreadas en crucigramas)
-- **Agregar palabra**: Añade una palabra con su pista al crucigrama
-- **Limpiar posición**: Borra el contenido de una celda
+- **Enviar mensajes**: Escribir mensajes que se sincronizan en tiempo real
+- **Crear canales**: Organizar conversaciones por temas
+- **Editar mensajes**: Modificar tus propios mensajes (solo autor)
+- **Eliminar mensajes**: Remover mensajes propios (soft delete)
+- **Buscar mensajes**: Encontrar mensajes por contenido o autor
+- **Ver estadísticas**: Métricas de actividad y participación
 
-### Características Colaborativas
-- **Sincronización automática**: Los cambios se propagan a todos los clientes conectados
-- **Resolución de conflictos**: Si dos usuarios escriben en la misma posición, prevalece el último writer
-- **Autoría**: Cada celda recuerda quién la modificó por última vez
-- **Estado consistente**: Todos los clientes convergen al mismo estado final
+### Lista de Nodos en Tiempo Real
+- **Autodescubrimiento**: Encuentra automáticamente usuarios cercanos
+- **Estado de conexión**: Visualiza quién está conectado/desconectado
+- **Información detallada**: IP, puerto, metadatos de cada nodo
+- **Conexiones P2P**: Se conecta automáticamente a nodos descubiertos
+- **Tolerancia a fallos**: Maneja desconexiones y reconexiones
 
 ## Arquitectura Técnica
 
@@ -104,46 +89,70 @@ El sistema usa un **CRDT tipo mapa** con las siguientes características:
 ### Componentes Principales
 
 1. **CRDTMap** (`crdt_base.py`): Implementación base del CRDT
-2. **CrucigramaCRDT** (`crucigrama_crdt.py`): Lógica específica del crucigrama
-3. **SincronizadorCrucigrama** (`sincronizacion.py`): Manejo de sincronización
-4. **ClienteP2P** (`sincronizacion.py`): Comunicación peer-to-peer
+2. **ChatCRDT** (`chat_crdt.py`): Lógica específica del chat cooperativo
+3. **SincronizadorChat** (`sincronizacion_chat.py`): Manejo de sincronización del chat
+4. **ClienteP2PChat** (`sincronizacion_chat.py`): Comunicación peer-to-peer con autodescubrimiento
 
 ## Ejemplo de Uso
 
 ```python
-from crucigrama_crdt import CrucigramaCRDT
-from sincronizacion import ClienteP2P
+from chat_crdt import ChatCRDT
+from sincronizacion_chat import ClienteP2PChat
 
-# Crear crucigrama
-crucigrama = CrucigramaCRDT(15, 15, "usuario1")
+# Crear chat
+chat = ChatCRDT("mi_usuario")
 
-# Establecer letras
-crucigrama.establecer_letra(2, 2, 'H', 'usuario1')
-crucigrama.establecer_letra(2, 3, 'O', 'usuario1')
-
-# Agregar palabra con pista
-crucigrama.agregar_palabra(
-    "Saludo común",
-    "HOLA", 
-    2, 2, "horizontal", 
-    "usuario1"
+# Enviar mensaje
+mensaje_id = chat.enviar_mensaje(
+    "¡Hola! Este es mi primer mensaje en el chat CRDT."
 )
 
-# Configurar sincronización P2P
-cliente = ClienteP2P(crucigrama)
+# Crear canal
+chat.crear_canal("tecnologia")
+
+# Enviar mensaje a canal específico
+chat.enviar_mensaje(
+    "Hablemos de CRDTs aquí",
+    canal="tecnologia"
+)
+
+# Editar mensaje
+chat.editar_mensaje(mensaje_id, "¡Hola! Mensaje editado.")
+
+# Buscar mensajes
+resultados = chat.buscar_mensajes("CRDT")
+
+# Configurar cliente P2P con autodescubrimiento
+cliente = ClienteP2PChat(chat, "Mi Usuario")
+cliente.iniciar()
+
+# Ver nodos descubiertos
+nodos = cliente.obtener_nodos_descubiertos()
+print(f"Encontrados {len(nodos)} nodos")
 ```
 
 ## Demostraciones Incluidas
 
-### Demo Básico
-- Dos usuarios trabajando simultáneamente
-- Sincronización automática de cambios
-- Verificación de convergencia de estado
+### Demo Básico del Chat
+- Envío de mensajes con timestamps
+- Creación de canales temáticos
+- Búsqueda de mensajes por contenido
+- Estadísticas de actividad en tiempo real
 
-### Demo de Conflictos
-- Escritura concurrente en la misma posición
-- Resolución automática usando Last Writer Wins
-- Convergencia a estado consistente
+### Demo de Colaboración Multi-usuario
+- Múltiples usuarios chateando simultáneamente
+- Sincronización automática de mensajes
+- Verificación de convergencia entre todos los nodos
+
+### Demo de Edición de Mensajes
+- Edición de mensajes propios
+- Eliminación de mensajes (soft delete)
+- Historial de cambios preservado
+
+### Demo P2P con Autodescubrimiento
+- Descubrimiento automático de nodos cercanos
+- Conexión automática entre usuarios
+- Lista en vivo de participantes conectados
 
 ## Conceptos de CRDTs Implementados
 
