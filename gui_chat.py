@@ -446,8 +446,8 @@ class ChatGUI:
             self.listbox_nodos.insert(tk.END, "🔍 Buscando nodos...")
         else:
             for nodo in nodos:
-                estado = "🟢" if nodo.id in self.cliente_p2p.conexiones_activas else "🔴"
-                texto = f"{estado} {nodo.nombre} ({nodo.ip}:{nodo.puerto})"
+                estado = "🟢" if nodo.node_id in self.cliente_p2p.conexiones_activas else "🔴"
+                texto = f"{estado} {nodo.nombre_usuario} ({nodo.ip_address}:{nodo.puerto})"
                 self.listbox_nodos.insert(tk.END, texto)
         
         # Actualizar información personal
@@ -537,7 +537,7 @@ class ChatGUI:
         self.listbox_usuarios.delete(0, tk.END)
         
         for usuario in usuarios:
-            estado = "🟢" if usuario in [n.nombre for n in self.cliente_p2p.obtener_nodos_descubiertos()] else "⚪"
+            estado = "🟢" if usuario in [n.nombre_usuario for n in self.cliente_p2p.obtener_nodos_descubiertos()] else "⚪"
             if usuario == self.usuario_id:
                 estado = "👤"  # Usuario actual
             
@@ -555,31 +555,27 @@ class ChatGUI:
             nodo = nodos[selection[0]]
             
             detalles = f"INFORMACIÓN DEL NODO\n\n"
-            detalles += f"Nombre: {nodo.nombre}\n"
-            detalles += f"ID: {nodo.id}\n"
-            detalles += f"IP: {nodo.ip}\n"
+            detalles += f"Nombre: {nodo.nombre_usuario}\n"
+            detalles += f"ID: {nodo.node_id}\n"
+            detalles += f"IP: {nodo.ip_address}\n"
             detalles += f"Puerto: {nodo.puerto}\n"
-            detalles += f"Servicio: {nodo.servicio}\n\n"
+            detalles += f"Tipo: {nodo.tipo_aplicacion}\n"
+            detalles += f"Versión: {nodo.version_protocolo}\n\n"
             
-            if nodo.metadatos:
-                detalles += "METADATOS:\n"
-                for key, value in nodo.metadatos.items():
-                    detalles += f"  {key}: {value}\n"
-            
-            messagebox.showinfo(f"Detalles: {nodo.nombre}", detalles)
+            messagebox.showinfo(f"Detalles: {nodo.nombre_usuario}", detalles)
             
     def _nodo_conectado(self, nodo: InfoNodo):
         """Callback cuando se conecta un nodo"""
         self.root.after(0, lambda: [
             self._actualizar_lista_nodos(),
-            self.barra_estado.config(text=f"Nodo conectado: {nodo.nombre}")
+            self.barra_estado.config(text=f"Nodo conectado: {nodo.nombre_usuario}")
         ])
         
     def _nodo_desconectado(self, nodo: InfoNodo):
         """Callback cuando se desconecta un nodo"""
         self.root.after(0, lambda: [
             self._actualizar_lista_nodos(),
-            self.barra_estado.config(text=f"Nodo desconectado: {nodo.nombre}")
+            self.barra_estado.config(text=f"Nodo desconectado: {nodo.nombre_usuario}")
         ])
         
     def _actualizar_interfaz(self):

@@ -165,7 +165,7 @@ class ClienteP2PChat:
         
         # Detener autodescubrimiento
         if self.gestor_descubrimiento:
-            self.gestor_descubrimiento.detener()
+            self.gestor_descubrimiento.detener_todos()
         
         self.logger.info("Cliente P2P detenido")
     
@@ -176,30 +176,32 @@ class ClienteP2PChat:
         
         try:
             info_nodo = InfoNodo(
-                id=self.chat.usuario_id,
-                nombre=self.nombre_usuario,
-                ip="localhost",
+                node_id=self.chat.usuario_id,
+                nombre_usuario=self.nombre_usuario,
+                ip_address="localhost",
                 puerto=self.puerto,
-                servicio="chat_crdt",
-                metadatos={
-                    'total_mensajes': len(self.chat.mensajes),
-                    'usuario': self.nombre_usuario,
-                    'version': '1.0',
-                    'canales': list(self.chat.canales.keys())
-                }
+                timestamp=time.time()
             )
             
             self.gestor_descubrimiento = GestorDescubrimiento(
-                info_local=info_nodo,
-                callback_nodo_descubierto=self._nodo_descubierto,
-                callback_nodo_perdido=self._nodo_perdido
+                self.chat.usuario_id,
+                self.nombre_usuario
             )
             
-            # Habilitar múltiples métodos de descubrimiento
-            self.gestor_descubrimiento.habilitar_descubrimiento(TipoDescubrimiento.UDP_BROADCAST)
-            self.gestor_descubrimiento.habilitar_descubrimiento(TipoDescubrimiento.ESCANEO_PUERTOS)
+            # Configurar callback
+            def callback_consolidado(accion, nodo):
+                if accion == "descubierto":
+                    self._nodo_descubierto(nodo)
+                elif accion == "perdido":
+                    self._nodo_perdido(nodo)
             
-            self.gestor_descubrimiento.iniciar()
+            self.gestor_descubrimiento.callbacks_cambio.append(callback_consolidado)
+            
+            # Agregar algoritmos de descubrimiento
+            self.gestor_descubrimiento.agregar_descubridor(TipoDescubrimiento.UDP_BROADCAST, self.puerto)
+            self.gestor_descubrimiento.agregar_descubridor(TipoDescubrimiento.SCAN_PUERTOS, self.puerto)
+            
+            self.gestor_descubrimiento.iniciar_todos()
             
             self.logger.info("Autodescubrimiento iniciado")
             
@@ -208,9 +210,9 @@ class ClienteP2PChat:
     
     def _nodo_descubierto(self, nodo: InfoNodo):
         """Callback cuando se descubre un nuevo nodo"""
-        if nodo.id != self.chat.usuario_id and nodo.id not in self.nodos_conocidos:
-            self.nodos_conocidos[nodo.id] = nodo
-            self.logger.info(f"Descubierto nodo: {nodo.nombre} ({nodo.ip}:{nodo.puerto})")
+        if nodo.node_id != self.chat.usuario_id and nodo.node_id not in self.nodos_conocidos:
+            self.nodos_conocidos[nodo.node_id] = nodo
+            self.logger.info(f"Descubierto nodo: {nodo.nombre_usuario} ({nodo.ip_address}:{nodo.puerto})")
             
             # Notificar a la UI
             if self.callback_nodo_conectado:
@@ -221,39 +223,39 @@ class ClienteP2PChat:
     
     def _nodo_perdido(self, nodo: InfoNodo):
         """Callback cuando se pierde un nodo"""
-        if nodo.id in self.nodos_conocidos:
-            del self.nodos_conocidos[nodo.id]
-            self.logger.info(f"Nodo perdido: {nodo.nombre}")
+        if nodo.node_id in self.nodos_conocidos:
+            del self.nodos_conocidos[nodo.node_id]
+            self.logger.info(f"Nodo perdido: {nodo.nombre_usuario}")
             
             # Notificar a la UI
             if self.callback_nodo_desconectado:
                 self.callback_nodo_desconectado(nodo)
             
             # Cerrar conexión si existe
-            if nodo.id in self.conexiones_activas:
+            if nodo.node_id in self.conexiones_activas:
                 try:
-                    self.conexiones_activas[nodo.id].close()
+                    self.conexiones_activas[nodo.node_id].close()
                 except:
                     pass
-                del self.conexiones_activas[nodo.id]
+                del self.conexiones_activas[nodo.node_id]
     
     def _conectar_a_nodo(self, nodo: InfoNodo):
         """Intenta conectarse a un nodo descubierto"""
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5)
-            sock.connect((nodo.ip, nodo.puerto))
+            sock.connect((nodo.ip_address, nodo.puerto))
             
-            self.conexiones_activas[nodo.id] = sock
-            self.sincronizador.registrar_cliente(nodo.id)
+            self.conexiones_activas[nodo.node_id] = sock
+            self.sincronizador.registrar_cliente(nodo.node_id)
             
             # Realizar sincronización inicial
-            self._sincronizar_con_nodo(nodo.id)
+            self._sincronizar_con_nodo(nodo.node_id)
             
-            self.logger.info(f"Conectado a nodo {nodo.nombre}")
+            self.logger.info(f"Conectado a nodo {nodo.nombre_usuario}")
             
         except Exception as e:
-            self.logger.error(f"Error conectando a nodo {nodo.nombre}: {e}")
+            self.logger.error(f"Error conectando a nodo {nodo.nombre_usuario}: {e}")
     
     def _ejecutar_servidor(self):
         """Ejecuta el servidor que acepta conexiones entrantes"""
