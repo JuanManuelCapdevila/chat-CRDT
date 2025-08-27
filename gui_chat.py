@@ -31,8 +31,8 @@ class ChatGUI:
         self.chat = ChatCRDT(self.usuario_id)
         self.chat.establecer_callback_cambio(self._actualizar_interfaz)
         
-        # Estado de la interfaz
-        self.canal_actual = "general"
+        # Estado de la interfaz - usando canal único
+        self.canal_actual = "chat"
         self.mensaje_seleccionado = None
         
         # Cliente P2P
@@ -54,7 +54,7 @@ class ChatGUI:
         self.cliente_p2p.iniciar()
         
         # Mensaje de bienvenida
-        self.chat.enviar_mensaje(f"🎉 {nombre_usuario} se ha unido al chat!", self.canal_actual)
+        self.chat.enviar_mensaje(f"🎉 {nombre_usuario} se ha unido al chat!")
         
     def _crear_interfaz(self):
         """Crea la interfaz principal"""
@@ -86,8 +86,8 @@ class ChatGUI:
         # Pestaña de nodos conectados
         self._crear_pestaña_nodos(notebook)
         
-        # Pestaña de canales
-        self._crear_pestaña_canales(notebook)
+        # Pestaña de chat único - simplificado
+        self._crear_pestaña_chat_unico(notebook)
         
     def _crear_pestaña_nodos(self, parent):
         """Crea la pestaña de nodos conectados"""
@@ -127,45 +127,39 @@ class ChatGUI:
         ttk.Button(button_frame, text="ℹ️ Detalles", 
                   command=self._mostrar_detalles_nodo).pack(side=tk.LEFT)
         
-    def _crear_pestaña_canales(self, parent):
-        """Crea la pestaña de canales"""
-        frame_canales = ttk.Frame(parent)
-        parent.add(frame_canales, text="📺 Canales")
+    def _crear_pestaña_chat_unico(self, parent):
+        """Crea la pestaña del chat único"""
+        frame_chat_info = ttk.Frame(parent)
+        parent.add(frame_chat_info, text="💬 Chat")
         
         # Título
-        ttk.Label(frame_canales, text="Canales de Chat", 
+        ttk.Label(frame_chat_info, text="Chat Único", 
                  font=("Arial", 12, "bold")).pack(pady=(5, 10))
         
-        # Lista de canales
-        list_frame = ttk.Frame(frame_canales)
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=5)
+        # Información del chat
+        info_frame = ttk.LabelFrame(frame_chat_info, text="Información", padding="10")
+        info_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        self.listbox_canales = tk.Listbox(list_frame, font=("Arial", 10))
-        scrollbar_canales = ttk.Scrollbar(list_frame, orient="vertical", 
-                                        command=self.listbox_canales.yview)
-        self.listbox_canales.configure(yscrollcommand=scrollbar_canales.set)
+        self.label_chat_info = tk.Label(info_frame, text="", font=("Arial", 9), 
+                                       justify=tk.LEFT, anchor=tk.W)
+        self.label_chat_info.pack(fill=tk.X)
         
-        self.listbox_canales.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar_canales.pack(side=tk.RIGHT, fill=tk.Y)
+        # Controles del chat
+        control_frame = ttk.LabelFrame(frame_chat_info, text="Controles", padding="10")
+        control_frame.pack(fill=tk.X, padx=5, pady=5)
         
-        self.listbox_canales.bind("<<ListboxSelect>>", self._cambiar_canal)
-        
-        # Botones de canales
-        button_frame = ttk.Frame(frame_canales)
-        button_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        ttk.Button(button_frame, text="➕ Nuevo Canal", 
-                  command=self._crear_canal).pack(side=tk.TOP, fill=tk.X, pady=(0, 2))
-        ttk.Button(button_frame, text="🔄 Actualizar", 
-                  command=self._actualizar_lista_canales).pack(side=tk.TOP, fill=tk.X)
+        ttk.Button(control_frame, text="🔄 Actualizar Chat", 
+                  command=self._actualizar_chat_info).pack(fill=tk.X, pady=(0, 5))
+        ttk.Button(control_frame, text="🧹 Limpiar Vista", 
+                  command=self._limpiar_chat).pack(fill=tk.X)
         
     def _crear_panel_chat(self, parent):
         """Crea el panel principal de chat"""
         panel_chat = ttk.Frame(parent)
         parent.add(panel_chat, weight=3)
         
-        # Título del canal actual
-        self.label_canal = tk.Label(panel_chat, text=f"# {self.canal_actual}", 
+        # Título del chat único
+        self.label_canal = tk.Label(panel_chat, text="💬 Chat Cooperativo", 
                                    font=("Arial", 14, "bold"))
         self.label_canal.pack(pady=(5, 10))
         
@@ -295,8 +289,8 @@ class ChatGUI:
         if not contenido:
             return
         
-        # Enviar mensaje
-        mensaje_id = self.chat.enviar_mensaje(contenido, self.canal_actual)
+        # Enviar mensaje al canal único
+        mensaje_id = self.chat.enviar_mensaje(contenido)
         
         if mensaje_id:
             # Limpiar entrada
@@ -308,7 +302,7 @@ class ChatGUI:
             # Scroll hacia abajo
             self.text_mensajes.see(tk.END)
             
-            self.barra_estado.config(text=f"Mensaje enviado a #{self.canal_actual}")
+            self.barra_estado.config(text=f"Mensaje enviado")
         
     def _insertar_emoji(self):
         """Inserta un emoji en el mensaje"""
@@ -410,31 +404,21 @@ class ChatGUI:
             except Exception as e:
                 messagebox.showerror("Error", f"Error al exportar: {e}")
                 
-    def _crear_canal(self):
-        """Crea un nuevo canal"""
-        nombre = simpledialog.askstring("Nuevo Canal", "Nombre del canal:")
-        if not nombre:
-            return
+    def _actualizar_chat_info(self):
+        """Actualiza información del chat único"""
+        stats = self.chat.obtener_estadisticas()
+        usuarios_activos = self.chat.obtener_usuarios_activos()
         
-        # Validar nombre
-        if not nombre.isalnum():
-            messagebox.showerror("Error", "El nombre del canal solo puede contener letras y números")
-            return
+        info_texto = f"Canal: #{self.canal_actual}\n"
+        info_texto += f"Mensajes totales: {stats['total_mensajes']}\n"
+        info_texto += f"Mensajes hoy: {stats['mensajes_hoy']}\n"
+        info_texto += f"Usuarios activos: {len(usuarios_activos)}"
         
-        if self.chat.crear_canal(nombre):
-            self._actualizar_lista_canales()
-            messagebox.showinfo("Canal", f"Canal #{nombre} creado")
-        else:
-            messagebox.showerror("Error", f"El canal #{nombre} ya existe")
+        self.label_chat_info.config(text=info_texto)
             
     def _cambiar_canal(self, event):
-        """Cambia el canal actual"""
-        selection = self.listbox_canales.curselection()
-        if selection:
-            canal = self.listbox_canales.get(selection[0]).replace("# ", "")
-            self.canal_actual = canal
-            self.label_canal.config(text=f"# {canal}")
-            self._actualizar_mensajes()
+        """Método mantenido para compatibilidad - no hace nada en canal único"""
+        pass
             
     def _actualizar_lista_nodos(self):
         """Actualiza la lista de nodos descubiertos"""
@@ -460,17 +444,8 @@ class ChatGUI:
         self.label_mi_info.config(text=info_texto)
         
     def _actualizar_lista_canales(self):
-        """Actualiza la lista de canales"""
-        self.listbox_canales.delete(0, tk.END)
-        
-        for canal in self.chat.canales.keys():
-            num_mensajes = len(self.chat.canales[canal])
-            texto = f"# {canal} ({num_mensajes})"
-            self.listbox_canales.insert(tk.END, texto)
-            
-            # Seleccionar canal actual
-            if canal == self.canal_actual:
-                self.listbox_canales.selection_set(self.listbox_canales.size() - 1)
+        """Actualiza información del canal único"""
+        self._actualizar_chat_info()
                 
     def _actualizar_mensajes(self):
         """Actualiza la visualización de mensajes"""
@@ -582,7 +557,7 @@ class ChatGUI:
         """Callback para actualizar la interfaz cuando cambia el CRDT"""
         self.root.after(0, lambda: [
             self._actualizar_mensajes(),
-            self._actualizar_lista_canales(),
+            self._actualizar_chat_info(),
             self._actualizar_usuarios_activos(),
             self._actualizar_estadisticas()
         ])
@@ -591,7 +566,7 @@ class ChatGUI:
         """Ejecuta la aplicación"""
         # Actualizar interfaz inicial
         self._actualizar_lista_nodos()
-        self._actualizar_lista_canales()
+        self._actualizar_chat_info()
         self._actualizar_estadisticas()
         
         # Configurar cierre
@@ -604,7 +579,7 @@ class ChatGUI:
         """Cierra la aplicación"""
         # Mensaje de despedida
         try:
-            self.chat.enviar_mensaje(f"👋 {self.usuario_id} ha salido del chat.", self.canal_actual)
+            self.chat.enviar_mensaje(f"👋 {self.usuario_id} ha salido del chat.")
             time.sleep(1)  # Dar tiempo para sincronizar
         except:
             pass

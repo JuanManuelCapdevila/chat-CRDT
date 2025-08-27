@@ -42,12 +42,14 @@ def test_p2p_con_estado():
     # Verificar estado
     print("5. Verificando estados:")
     print(f"Alice tiene {len(alice.chat.mensajes)} mensajes:")
-    for msg in alice.chat.obtener_mensajes_canal("general"):
-        print(f"   {msg.autor}: {msg.contenido}")
+    for msg in alice.chat.obtener_mensajes_canal("chat"):
+        contenido_safe = msg.contenido.encode('ascii', 'ignore').decode('ascii')
+        print(f"   {msg.autor}: {contenido_safe}")
     
     print(f"Bob tiene {len(bob.chat.mensajes)} mensajes:")
-    for msg in bob.chat.obtener_mensajes_canal("general"):
-        print(f"   {msg.autor}: {msg.contenido}")
+    for msg in bob.chat.obtener_mensajes_canal("chat"):
+        contenido_safe = msg.contenido.encode('ascii', 'ignore').decode('ascii')
+        print(f"   {msg.autor}: {contenido_safe}")
     
     # Verificar autodescubrimiento
     print("6. Nodos descubiertos:")

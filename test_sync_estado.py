@@ -82,7 +82,7 @@ def test_sincronizacion_estado():
         bob_ids = set(chat_bob.mensajes.keys())
         
         if alice_ids == bob_ids:
-            print("✅ Ambos chats tienen los mismos mensajes (IDs coinciden)")
+            print("[OK] Ambos chats tienen los mismos mensajes (IDs coinciden)")
             
             # Verificar contenido
             contenidos_iguales = True
@@ -96,16 +96,16 @@ def test_sincronizacion_estado():
                     break
             
             if contenidos_iguales:
-                print("✅ El contenido de todos los mensajes coincide")
-                print("🎉 ¡SINCRONIZACIÓN POR ESTADO EXITOSA!")
+                print("[OK] El contenido de todos los mensajes coincide")
+                print("SUCCESS: SINCRONIZACION POR ESTADO EXITOSA!")
             else:
-                print("❌ El contenido de algunos mensajes no coincide")
+                print("[ERROR] El contenido de algunos mensajes no coincide")
         else:
-            print("❌ Los chats tienen mensajes diferentes")
+            print("[ERROR] Los chats tienen mensajes diferentes")
             print(f"Solo en Alice: {alice_ids - bob_ids}")
             print(f"Solo en Bob: {bob_ids - alice_ids}")
     else:
-        print(f"❌ Diferentes números de mensajes: Alice({len(chat_alice.mensajes)}) vs Bob({len(chat_bob.mensajes)})")
+        print(f"[ERROR] Diferentes numeros de mensajes: Alice({len(chat_alice.mensajes)}) vs Bob({len(chat_bob.mensajes)})")
 
 
 if __name__ == "__main__":

@@ -60,7 +60,9 @@ class ChatCRDT:
         self.usuario_id = usuario_id
         self.crdt_map = CRDTMap(usuario_id)
         self.mensajes: Dict[str, Mensaje] = {}
-        self.canales: Dict[str, List[str]] = {"general": []}  # canal -> lista de mensaje_ids
+        # CANAL ÚNICO - todos los mensajes van al canal "chat"
+        self.canal_unico = "chat"
+        self.canales: Dict[str, List[str]] = {self.canal_unico: []}
         self.usuarios_conectados: Dict[str, Dict[str, Any]] = {}
         self.callback_cambio = None
         self.operaciones_log: List[Operacion] = []
@@ -78,26 +80,25 @@ class ChatCRDT:
         if self.callback_cambio:
             self.callback_cambio()
     
-    def enviar_mensaje(self, contenido: str, canal: str = "general") -> str:
-        """Envía un mensaje al chat"""
+    def enviar_mensaje(self, contenido: str, canal: str = None) -> str:
+        """Envía un mensaje al chat - siempre al canal único"""
         # Incrementar vector clock
         self._incrementar_vector_clock()
         
         mensaje_id = str(uuid.uuid4())
         
+        # TODOS los mensajes van al canal único
         mensaje = Mensaje(
             mensaje_id=mensaje_id,
             contenido=contenido,
             autor=self.usuario_id,
             timestamp=datetime.now(),
-            canal=canal
+            canal=self.canal_unico  # Siempre usar canal único
         )
         
         # Aplicar localmente
         self.mensajes[mensaje_id] = mensaje
-        if canal not in self.canales:
-            self.canales[canal] = []
-        self.canales[canal].append(mensaje_id)
+        self.canales[self.canal_unico].append(mensaje_id)
         
         # Crear operación CRDT (para compatibilidad)
         self.crdt_map.counter += 1
@@ -193,35 +194,14 @@ class ChatCRDT:
         return True
     
     def crear_canal(self, nombre_canal: str) -> bool:
-        """Crea un nuevo canal"""
-        if nombre_canal in self.canales:
-            return False
-        
-        # Crear operación CRDT
-        self.crdt_map.counter += 1
-        operacion = Operacion(
-            tipo="crear_canal",
-            clave=nombre_canal,
-            valor={"creador": self.usuario_id, "timestamp": datetime.now().isoformat()},
-            timestamp=Timestamp(self.usuario_id, self.crdt_map.counter),
-            usuario=self.usuario_id
-        )
-        
-        # Aplicar localmente
-        self.canales[nombre_canal] = []
-        
-        # Guardar operación
-        self.operaciones_log.append(operacion)
-        
-        self._notificar_cambio()
-        return True
+        """Crear canal - DESHABILITADO: Solo existe un canal único"""
+        # En modo canal único, no se permiten canales nuevos
+        return False
     
-    def obtener_mensajes_canal(self, canal: str = "general") -> List[Mensaje]:
-        """Obtiene los mensajes de un canal ordenados por timestamp"""
-        if canal not in self.canales:
-            return []
-        
-        mensajes_canal = [self.mensajes[msg_id] for msg_id in self.canales[canal] 
+    def obtener_mensajes_canal(self, canal: str = None) -> List[Mensaje]:
+        """Obtiene los mensajes del canal único ordenados por timestamp"""
+        # Siempre usar el canal único, ignorar parámetro
+        mensajes_canal = [self.mensajes[msg_id] for msg_id in self.canales[self.canal_unico] 
                          if msg_id in self.mensajes]
         
         # Ordenar por timestamp
@@ -384,15 +364,13 @@ class ChatCRDT:
             mensaje_remoto = Mensaje.from_dict(mensaje_data)
             
             if mensaje_id not in self.mensajes:
-                # Mensaje nuevo
+                # Mensaje nuevo - SIEMPRE va al canal único
+                mensaje_remoto.canal = self.canal_unico  # Forzar canal único
                 self.mensajes[mensaje_id] = mensaje_remoto
                 
-                # Agregar a canal correspondiente
-                canal = mensaje_remoto.canal
-                if canal not in self.canales:
-                    self.canales[canal] = []
-                if mensaje_id not in self.canales[canal]:
-                    self.canales[canal].append(mensaje_id)
+                # Agregar al canal único
+                if mensaje_id not in self.canales[self.canal_unico]:
+                    self.canales[self.canal_unico].append(mensaje_id)
                 
                 cambios_realizados = True
                 
@@ -402,20 +380,16 @@ class ChatCRDT:
                 
                 if mensaje_remoto.timestamp > mensaje_local.timestamp:
                     # El mensaje remoto es más reciente
+                    mensaje_remoto.canal = self.canal_unico  # Forzar canal único
                     self.mensajes[mensaje_id] = mensaje_remoto
                     cambios_realizados = True
         
-        # Sincronizar canales
-        for canal, mensaje_ids in canales_remotos.items():
-            if canal not in self.canales:
-                self.canales[canal] = []
+        # Sincronizar canales - Solo el canal único
+        # Agregar todos los mensajes remotos al canal único
+        for mensaje_id in self.mensajes.keys():
+            if mensaje_id not in self.canales[self.canal_unico]:
+                self.canales[self.canal_unico].append(mensaje_id)
                 cambios_realizados = True
-            
-            # Agregar mensajes que no tenemos
-            for mensaje_id in mensaje_ids:
-                if mensaje_id not in self.canales[canal] and mensaje_id in self.mensajes:
-                    self.canales[canal].append(mensaje_id)
-                    cambios_realizados = True
         
         if cambios_realizados:
             self._notificar_cambio()

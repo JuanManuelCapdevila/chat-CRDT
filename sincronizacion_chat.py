@@ -384,29 +384,40 @@ class ClienteP2PChat:
         try:
             sock = self.conexiones_activas[nodo_id]
             
-            # Solicitar actualizaciones
+            # Solicitar estado completo del nodo remoto
             mensaje = {
                 'tipo': 'sync_request',
-                'timestamp_desde': self._serializar_timestamp(self.sincronizador.ultimo_sync_timestamp)
+                'timestamp_desde': None  # Para estado completo
             }
             
             sock.send(json.dumps(mensaje).encode())
             
-            # Recibir respuesta
+            # Recibir respuesta con estado completo
             data = sock.recv(8192)
+            if not data:
+                return
+                
             respuesta = json.loads(data.decode())
             
             if respuesta.get('exito') and 'datos' in respuesta:
+                # Aplicar estado recibido
                 self.sincronizador.aplicar_actualizaciones(respuesta['datos'])
                 
-                # Actualizar timestamp de última sincronización
-                operaciones = respuesta['datos'].get('operaciones', [])
-                if operaciones:
-                    ultimo_ts = max(operaciones, key=lambda op: (op['timestamp']['node_id'], op['timestamp']['counter']))
-                    self.sincronizador.ultimo_sync_timestamp = Timestamp(
-                        ultimo_ts['timestamp']['node_id'],
-                        ultimo_ts['timestamp']['counter']
-                    )
+                # Enviar nuestro estado de vuelta
+                nuestro_estado = self.sincronizador.obtener_actualizaciones_desde(None)
+                mensaje_respuesta = {
+                    'tipo': 'sync_data',
+                    'datos': nuestro_estado
+                }
+                
+                sock.send(json.dumps(mensaje_respuesta).encode())
+                
+                # Esperar confirmación
+                ack_data = sock.recv(1024)
+                if ack_data:
+                    ack_response = json.loads(ack_data.decode())
+                    if not ack_response.get('exito'):
+                        self.logger.warning(f"Nodo {nodo_id} no pudo aplicar nuestros datos")
             
         except Exception as e:
             self.logger.error(f"Error sincronizando con nodo {nodo_id}: {e}")
