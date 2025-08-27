@@ -34,26 +34,22 @@ class SincronizadorChat:
         self.clientes_conectados.discard(cliente_id)
         
     def obtener_actualizaciones_desde(self, timestamp: Optional[Timestamp] = None) -> Dict:
-        """Obtiene todas las operaciones desde un timestamp dado"""
-        operaciones = self.chat.obtener_operaciones()
-        
-        # Filtrar operaciones por timestamp si se especifica
-        if timestamp:
-            operaciones_filtradas = []
-            for op in operaciones:
-                if op.timestamp.node_id > timestamp.node_id or \
-                   (op.timestamp.node_id == timestamp.node_id and op.timestamp.counter > timestamp.counter):
-                    operaciones_filtradas.append(op)
-            operaciones = operaciones_filtradas
-        
+        """Obtiene el estado completo para sincronización por estado"""
         return {
-            'operaciones': [self._serializar_operacion(op) for op in operaciones],
-            'estado_completo': self.chat.exportar_chat() if timestamp is None else None
+            'tipo_sync': 'estado',
+            'estado_completo': self.chat.obtener_estado_completo(),
+            'vector_clock': self.chat.vector_clock.copy()
         }
     
     def aplicar_actualizaciones(self, datos_sync: Dict):
         """Aplica actualizaciones recibidas de otros clientes"""
-        if 'operaciones' in datos_sync:
+        tipo_sync = datos_sync.get('tipo_sync', 'operaciones')
+        
+        if tipo_sync == 'estado' and 'estado_completo' in datos_sync:
+            # Sincronización por estado
+            self.chat.sincronizar_por_estado(datos_sync['estado_completo'])
+        elif 'operaciones' in datos_sync:
+            # Sincronización por operaciones (fallback)
             operaciones = [self._deserializar_operacion(op) for op in datos_sync['operaciones']]
             self.chat.sincronizar_con(operaciones)
     
@@ -334,7 +330,7 @@ class ClienteP2PChat:
             
             if tipo == 'sync_request':
                 timestamp_desde = None
-                if 'timestamp_desde' in mensaje:
+                if 'timestamp_desde' in mensaje and mensaje['timestamp_desde'] is not None:
                     ts_data = mensaje['timestamp_desde']
                     timestamp_desde = Timestamp(ts_data['node_id'], ts_data['counter'])
                 

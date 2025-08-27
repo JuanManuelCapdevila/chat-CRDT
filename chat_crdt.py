@@ -65,6 +65,10 @@ class ChatCRDT:
         self.callback_cambio = None
         self.operaciones_log: List[Operacion] = []
         
+        # Para sincronización por estado
+        self.vector_clock: Dict[str, int] = {usuario_id: 0}  # node_id -> counter
+        self.ultimo_estado_hash: str = ""
+        
     def establecer_callback_cambio(self, callback):
         """Establece callback para notificar cambios en la UI"""
         self.callback_cambio = callback
@@ -76,6 +80,9 @@ class ChatCRDT:
     
     def enviar_mensaje(self, contenido: str, canal: str = "general") -> str:
         """Envía un mensaje al chat"""
+        # Incrementar vector clock
+        self._incrementar_vector_clock()
+        
         mensaje_id = str(uuid.uuid4())
         
         mensaje = Mensaje(
@@ -86,7 +93,13 @@ class ChatCRDT:
             canal=canal
         )
         
-        # Crear operación CRDT
+        # Aplicar localmente
+        self.mensajes[mensaje_id] = mensaje
+        if canal not in self.canales:
+            self.canales[canal] = []
+        self.canales[canal].append(mensaje_id)
+        
+        # Crear operación CRDT (para compatibilidad)
         self.crdt_map.counter += 1
         operacion = Operacion(
             tipo="enviar_mensaje",
@@ -95,12 +108,6 @@ class ChatCRDT:
             timestamp=Timestamp(self.usuario_id, self.crdt_map.counter),
             usuario=self.usuario_id
         )
-        
-        # Aplicar localmente
-        self.mensajes[mensaje_id] = mensaje
-        if canal not in self.canales:
-            self.canales[canal] = []
-        self.canales[canal].append(mensaje_id)
         
         # Guardar operación para sincronización
         self.operaciones_log.append(operacion)
@@ -344,3 +351,77 @@ class ChatCRDT:
             'timestamp_exportacion': datetime.now().isoformat(),
             'estadisticas': self.obtener_estadisticas()
         }
+    
+    def obtener_estado_completo(self) -> Dict[str, Any]:
+        """Obtiene el estado completo del chat para sincronización"""
+        return {
+            'usuario_id': self.usuario_id,
+            'vector_clock': self.vector_clock.copy(),
+            'mensajes': {mid: msg.to_dict() for mid, msg in self.mensajes.items()},
+            'canales': self.canales.copy(),
+            'timestamp': datetime.now().timestamp()
+        }
+    
+    def sincronizar_por_estado(self, estado_remoto: Dict[str, Any]) -> bool:
+        """Sincroniza usando el estado completo de otro nodo"""
+        cambios_realizados = False
+        usuario_remoto = estado_remoto.get('usuario_id')
+        vector_clock_remoto = estado_remoto.get('vector_clock', {})
+        mensajes_remotos = estado_remoto.get('mensajes', {})
+        canales_remotos = estado_remoto.get('canales', {})
+        
+        # Actualizar vector clock
+        for node_id, counter in vector_clock_remoto.items():
+            if node_id not in self.vector_clock:
+                self.vector_clock[node_id] = 0
+            
+            if counter > self.vector_clock[node_id]:
+                self.vector_clock[node_id] = counter
+                cambios_realizados = True
+        
+        # Sincronizar mensajes usando Last Writer Wins
+        for mensaje_id, mensaje_data in mensajes_remotos.items():
+            mensaje_remoto = Mensaje.from_dict(mensaje_data)
+            
+            if mensaje_id not in self.mensajes:
+                # Mensaje nuevo
+                self.mensajes[mensaje_id] = mensaje_remoto
+                
+                # Agregar a canal correspondiente
+                canal = mensaje_remoto.canal
+                if canal not in self.canales:
+                    self.canales[canal] = []
+                if mensaje_id not in self.canales[canal]:
+                    self.canales[canal].append(mensaje_id)
+                
+                cambios_realizados = True
+                
+            else:
+                # Mensaje existente - comparar timestamps
+                mensaje_local = self.mensajes[mensaje_id]
+                
+                if mensaje_remoto.timestamp > mensaje_local.timestamp:
+                    # El mensaje remoto es más reciente
+                    self.mensajes[mensaje_id] = mensaje_remoto
+                    cambios_realizados = True
+        
+        # Sincronizar canales
+        for canal, mensaje_ids in canales_remotos.items():
+            if canal not in self.canales:
+                self.canales[canal] = []
+                cambios_realizados = True
+            
+            # Agregar mensajes que no tenemos
+            for mensaje_id in mensaje_ids:
+                if mensaje_id not in self.canales[canal] and mensaje_id in self.mensajes:
+                    self.canales[canal].append(mensaje_id)
+                    cambios_realizados = True
+        
+        if cambios_realizados:
+            self._notificar_cambio()
+            
+        return cambios_realizados
+    
+    def _incrementar_vector_clock(self):
+        """Incrementa el vector clock local"""
+        self.vector_clock[self.usuario_id] = self.vector_clock.get(self.usuario_id, 0) + 1
