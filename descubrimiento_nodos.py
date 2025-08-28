@@ -188,7 +188,7 @@ class DescubridorUDPBroadcast(DescubridorNodos):
         info = InfoNodo(
             node_id=self.node_id,
             nombre_usuario=self.nombre_usuario,
-            ip_address="localhost",  # Usar localhost para pruebas locales
+            ip_address=self._obtener_ip_local(),  # Usar IP real de la red
             puerto=self.puerto_servicio_chat,  # Usar puerto del chat, no del descubridor
             timestamp=time.time(),
             puerto_chat=self.puerto_servicio_chat
@@ -205,14 +205,18 @@ class DescubridorUDPBroadcast(DescubridorNodos):
             if info_nodo.node_id == self.node_id:
                 return
             
+            # Usar la IP real del remitente en lugar de la declarada
+            info_nodo.ip_address = addr[0]
+            
             # Verificar si es un nodo nuevo o actualización
             if info_nodo.node_id not in self.nodos_descubiertos:
-                self.logger.info(f"Nuevo nodo descubierto: {info_nodo.nombre_usuario} ({info_nodo.node_id})")
+                self.logger.info(f"Nuevo nodo descubierto: {info_nodo.nombre_usuario} ({info_nodo.node_id}) desde {addr[0]}:{info_nodo.puerto}")
                 self.nodos_descubiertos[info_nodo.node_id] = info_nodo
                 self._notificar_descubrimiento(info_nodo)
             else:
-                # Actualizar timestamp del nodo existente
+                # Actualizar timestamp e IP del nodo existente
                 self.nodos_descubiertos[info_nodo.node_id].timestamp = info_nodo.timestamp
+                self.nodos_descubiertos[info_nodo.node_id].ip_address = addr[0]
         
         except Exception as e:
             self.logger.error(f"Error procesando broadcast de {addr}: {e}")

@@ -41,17 +41,21 @@ class SincronizadorChat:
             'vector_clock': self.chat.vector_clock.copy()
         }
     
-    def aplicar_actualizaciones(self, datos_sync: Dict):
+    def aplicar_actualizaciones(self, datos_sync: Dict) -> bool:
         """Aplica actualizaciones recibidas de otros clientes"""
+        cambios = False
         tipo_sync = datos_sync.get('tipo_sync', 'operaciones')
         
         if tipo_sync == 'estado' and 'estado_completo' in datos_sync:
             # Sincronización por estado
-            self.chat.sincronizar_por_estado(datos_sync['estado_completo'])
+            cambios = self.chat.sincronizar_por_estado(datos_sync['estado_completo'])
         elif 'operaciones' in datos_sync:
             # Sincronización por operaciones (fallback)
             operaciones = [self._deserializar_operacion(op) for op in datos_sync['operaciones']]
             self.chat.sincronizar_con(operaciones)
+            cambios = len(operaciones) > 0
+            
+        return cambios
     
     def _serializar_operacion(self, operacion: Operacion) -> Dict:
         """Convierte una operación a formato JSON"""
@@ -125,7 +129,7 @@ class ClienteP2PChat:
     def _obtener_puerto_libre(self) -> int:
         """Encuentra un puerto libre para el servidor"""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('localhost', 0))
+            s.bind(('', 0))  # Escuchar en todas las interfaces
             return s.getsockname()[1]
     
     def _obtener_puerto_en_rango(self, puerto_base: int = 12000) -> int:
@@ -133,7 +137,7 @@ class ClienteP2PChat:
         for puerto in range(puerto_base, puerto_base + 100):
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.bind(('localhost', puerto))
+                    s.bind(('', puerto))  # Escuchar en todas las interfaces
                     return puerto
             except OSError:
                 continue
@@ -271,7 +275,7 @@ class ClienteP2PChat:
         try:
             servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            servidor.bind(('localhost', self.puerto))
+            servidor.bind(('', self.puerto))  # Escuchar en todas las interfaces
             servidor.listen(5)
             servidor.settimeout(1)
             
@@ -307,7 +311,7 @@ class ClienteP2PChat:
             
             while self.activo:
                 # Recibir mensaje
-                data = cliente_sock.recv(4096)
+                data = cliente_sock.recv(8192)  # Aumentar buffer para estado completo
                 if not data:
                     break
                 
@@ -317,6 +321,9 @@ class ClienteP2PChat:
                 # Enviar respuesta
                 respuesta_json = json.dumps(respuesta).encode()
                 cliente_sock.send(respuesta_json)
+                
+                # Para sync_data, no necesitamos respuesta adicional
+                # La confirmación ya se envió arriba
                 
         except Exception as e:
             self.logger.error(f"Error manejando cliente {direccion}: {e}")
@@ -377,48 +384,39 @@ class ClienteP2PChat:
                 self.logger.error(f"Error en bucle de sincronización: {e}")
     
     def _sincronizar_con_nodo(self, nodo_id: str):
-        """Sincroniza con un nodo específico"""
+        """Sincroniza con un nodo específico usando protocolo simplificado"""
         if nodo_id not in self.conexiones_activas:
             return
         
         try:
             sock = self.conexiones_activas[nodo_id]
+            sock.settimeout(10)  # Timeout más corto para evitar colgarse
             
-            # Solicitar estado completo del nodo remoto
+            # Paso 1: Enviar nuestro estado completo al nodo remoto
+            nuestro_estado = self.sincronizador.obtener_actualizaciones_desde(None)
             mensaje = {
-                'tipo': 'sync_request',
-                'timestamp_desde': None  # Para estado completo
+                'tipo': 'sync_data',
+                'datos': nuestro_estado,
+                'origen': self.chat.usuario_id
             }
             
-            sock.send(json.dumps(mensaje).encode())
+            mensaje_json = json.dumps(mensaje)
+            sock.send(mensaje_json.encode())
             
-            # Recibir respuesta con estado completo
-            data = sock.recv(8192)
-            if not data:
-                return
-                
-            respuesta = json.loads(data.decode())
+            # Paso 2: Recibir confirmación
+            ack_data = sock.recv(1024)
+            if ack_data:
+                ack = json.loads(ack_data.decode())
+                if ack.get('exito'):
+                    self.logger.debug(f"Estado enviado exitosamente a {nodo_id}")
+                else:
+                    self.logger.warning(f"Nodo {nodo_id} rechazó nuestros datos")
             
-            if respuesta.get('exito') and 'datos' in respuesta:
-                # Aplicar estado recibido
-                self.sincronizador.aplicar_actualizaciones(respuesta['datos'])
-                
-                # Enviar nuestro estado de vuelta
-                nuestro_estado = self.sincronizador.obtener_actualizaciones_desde(None)
-                mensaje_respuesta = {
-                    'tipo': 'sync_data',
-                    'datos': nuestro_estado
-                }
-                
-                sock.send(json.dumps(mensaje_respuesta).encode())
-                
-                # Esperar confirmación
-                ack_data = sock.recv(1024)
-                if ack_data:
-                    ack_response = json.loads(ack_data.decode())
-                    if not ack_response.get('exito'):
-                        self.logger.warning(f"Nodo {nodo_id} no pudo aplicar nuestros datos")
+            # No necesitamos solicitar de vuelta - cada nodo envía a todos los demás
+            # La sincronización bidireccional ya se maneja automáticamente
             
+        except socket.timeout:
+            self.logger.warning(f"Timeout sincronizando con {nodo_id}")
         except Exception as e:
             self.logger.error(f"Error sincronizando con nodo {nodo_id}: {e}")
             # Eliminar conexión problemática
